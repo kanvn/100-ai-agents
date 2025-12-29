@@ -1,73 +1,60 @@
+# app.py
 import streamlit as st
 import asyncio
 import os
 import plotly.express as px
-# Import code xử lý từ file core_logic
-from core_logic import GrandCouncilPipeline, CONFIG 
+from cortex import CortexProcessor 
+from settings import CONFIG
 
-# Cấu hình trang web
-st.set_page_config(page_title="AI Hive Mind Pro", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Neural Hive", page_icon="🧠", layout="wide")
+st.title("🧠 HỆ THỐNG MẠNG LƯỚI 100 AI (NEURAL HIVE)")
 
-st.title("🧠 ĐẠI HỘI ĐỒNG 100 AI")
-st.caption("Hệ thống trí tuệ bầy đàn thực chiến")
-
-# --- THANH CẤU HÌNH BÊN TRÁI ---
+# --- SIDEBAR (Cấu hình) ---
 with st.sidebar:
-    st.header("⚙️ Cấu hình lõi")
+    st.header("⚙️ Cấu hình Neural")
+    mode = st.radio("Chế độ:", ["Giả lập (Simulation)", "Thực chiến (Live Brain)"])
     
-    # Nút chuyển chế độ
-    mode = st.radio("Chế độ hoạt động:", ["Giả lập (Miễn phí)", "Thực chiến (API)"])
-    if mode == "Thực chiến (API)":
+    if mode == "Thực chiến (Live Brain)":
         CONFIG["SIMULATION_MODE"] = False
-        api_key = st.text_input("Nhập OpenAI API Key:", type="password")
+        api_key = st.text_input("OpenAI Key:", type="password")
         if api_key: os.environ["OPENAI_API_KEY"] = api_key
     else:
         CONFIG["SIMULATION_MODE"] = True
         
-    CONFIG["TOTAL_AGENTS"] = st.slider("Số lượng Chuyên gia", 5, 50, 20)
+    CONFIG["TOTAL_AGENTS"] = st.slider("Số lượng Noron kích hoạt", 10, 100, 50)
 
-# --- GIAO DIỆN CHÍNH ---
-question = st.text_area("Nhập vấn đề khó khăn của bạn:", height=100)
+# --- MAIN UI ---
+user_input = st.text_area("Nhập tín hiệu đầu vào (Vấn đề):", height=100)
 
-if st.button("🚀 KÍCH HOẠT HỆ THỐNG", type="primary"):
-    if not question:
-        st.warning("Vui lòng nhập câu hỏi!")
+if st.button("⚡ KÍCH HOẠT HỆ THẦN KINH", type="primary"):
+    if not user_input:
+        st.warning("Chưa có tín hiệu đầu vào!")
     else:
-        pipeline = GrandCouncilPipeline()
+        # Khởi tạo bộ não
+        brain = CortexProcessor()
         
-        # Tạo các khu vực hiển thị
         status = st.empty()
         bar = st.progress(0)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            with st.expander("GĐ 1: Thu thập ý kiến", expanded=True): log1 = st.empty()
-        with col2:
-            with st.expander("GĐ 2: Phân tích & Gom nhóm", expanded=True): log2 = st.empty()
-        with col3:
-            with st.expander("GĐ 3: Tổng hợp", expanded=True): log3 = st.empty()
+        c1, c2, c3 = st.columns(3)
+        with c1: 
+            with st.expander("GĐ 1: Kích hoạt Noron", expanded=True): log1 = st.empty()
+        with c2: 
+            with st.expander("GĐ 2: Phân vùng não bộ", expanded=True): log2 = st.empty()
+        with c3: 
+            with st.expander("GĐ 3: Quyết định", expanded=True): log3 = st.empty()
 
-        # --- CHẠY LOGIC (KHẮC PHỤC LỖI TẠI DÒNG NÀY) ---
-        # Truyền đủ 4 tham số: question, status, bar, logs
+        # Chạy
         try:
-            result_text, df_chart = asyncio.run(pipeline.run(question, status, bar, [log1, log2, log3]))
+            result, df = asyncio.run(brain.process_signal(user_input, status, bar, [log1, log2, log3]))
             
-            # Hiển thị kết quả
-            st.success("✅ ĐÃ CÓ PHƯƠNG ÁN XỬ LÝ!")
-            st.markdown("### 📝 KẾT QUẢ QUYẾT NGHỊ:")
-            st.write(result_text)
+            st.success("✅ ĐÃ CÓ PHẢN XẠ THẦN KINH!")
+            st.markdown(result)
             
-            # Vẽ biểu đồ tư duy (Nếu có dữ liệu)
-            if df_chart is not None and not df_chart.empty:
+            if df is not None and not df.empty:
                 st.markdown("---")
-                st.markdown("### 📊 BẢN ĐỒ TƯ DUY CỦA CÁC AGENT")
-                fig = px.scatter(
-                    df_chart, x="x", y="y", 
-                    color="Cluster", hover_data=["Role", "Content"],
-                    title="Sự phân bố các luồng ý kiến"
-                )
+                st.markdown("### 🌌 BẢN ĐỒ HOẠT ĐỘNG NÃO BỘ")
+                fig = px.scatter(df, x="x", y="y", color="Cluster", hover_data=["Role", "Content"], title="Sự phân bố các luồng suy nghĩ")
                 st.plotly_chart(fig, use_container_width=True)
                 
         except Exception as e:
-            st.error(f"Đã xảy ra lỗi: {str(e)}")
-            st.info("Mẹo: Nếu dùng chế độ Thực chiến, hãy kiểm tra lại API Key.")
+            st.error(f"Lỗi hệ thần kinh: {e}")
