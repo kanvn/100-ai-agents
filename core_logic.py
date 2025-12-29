@@ -9,20 +9,24 @@ import plotly.express as px
 
 # --- CẤU HÌNH ---
 CONFIG = {
-    # Nếu False: Chạy thật (Tốn tiền API). Nếu True: Chạy giả lập (Miễn phí)
-    "SIMULATION_MODE": False, 
-    "TOTAL_AGENTS": 20,           # Chạy thật nên giảm xuống 20-30 con cho đỡ tốn tiền
-    "FILTER_KEEP": 5,
-    "REAL_MODEL": "gpt-4o-mini",  # Hoặc "gemini/gemini-1.5-flash" (Rẻ & Nhanh)
+    "SIMULATION_MODE": False,     # Mặc định tắt giả lập để nhắc bạn nhập Key
+    "TOTAL_AGENTS": 10,           # 10 chuyên gia là đủ để ra quyết định sâu sắc
+    "FILTER_KEEP": 3,             # Giữ lại 3 luồng ý kiến chính
+    "REAL_MODEL": "gpt-4o-mini",  # Model thông minh và rẻ
     "TIMEOUT": 60
 }
 
-# --- CÁC VAI TRÒ CHUYÊN GIA ---
+# --- DANH SÁCH VAI DIỄN CHUYÊN BIỆT CHO NHÀ MÁY ---
+# Đã xóa Bác sĩ/Hacker, thay bằng đội ngũ quản trị doanh nghiệp
 ROLES_DB = [
-    "Kỹ sư An ninh mạng (Cyber Security)", "Giám đốc Tài chính (CFO)", 
-    "Nhà Xã hội học", "Luật sư Quốc tế", "Hacker Mũ trắng", 
-    "Chuyên gia Tâm lý hành vi", "Nhà đầu tư mạo hiểm", "Bác sĩ",
-    "Nhà hoạt động môi trường", "Chuyên gia Marketing"
+    "Giám đốc Tài chính (CFO)", 
+    "Giám đốc Sản xuất (Factory Manager)", 
+    "Trưởng phòng Quản lý Chất lượng (QC Manager)", 
+    "Giám đốc Kinh doanh (Sales Director)", 
+    "Kế toán trưởng", 
+    "Kỹ sư Quy trình (Process Engineer)",
+    "Chuyên gia Chuỗi cung ứng",
+    "Luật sư Thương mại"
 ]
 
 class AIAgent:
@@ -33,21 +37,30 @@ class AIAgent:
     async def process(self, user_question, semaphore):
         async with semaphore:
             try:
-                # --- LOGIC GIẢ LẬP (ĐỂ TEST) ---
+                # --- CHẾ ĐỘ GIẢ LẬP (Mẫu trả lời về Bavia) ---
                 if CONFIG["SIMULATION_MODE"]:
-                    await asyncio.sleep(random.uniform(0.5, 2.0))
-                    content = f"[{self.role}] Theo tôi, vấn đề '{user_question[:10]}...' cần giải quyết bằng quy trình chuẩn hóa số {random.randint(100,999)}."
-                    # Vector giả 1536 chiều (giống OpenAI)
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    if "CFO" in self.role or "Tài chính" in self.role:
+                        content = f"[{self.role}] Về mặt tài chính, lô hàng Bavia này nên HỦY. Chi phí sửa chữa (Rework) tốn 15% margin, rủi ro khách trả hàng cao gấp đôi."
+                    elif "Sản xuất" in self.role:
+                        content = f"[{self.role}] Tôi đề xuất sửa lại khuôn ngay lập tức. Cho công nhân tăng ca xử lý lô này để kịp tiến độ."
+                    else:
+                        content = f"[{self.role}] Cần xem lại hợp đồng với khách hàng về tiêu chuẩn chấp nhận lỗi ngoại quan."
+                    
                     vector = np.random.rand(1536).tolist()
                     return {"id": self.id, "role": self.role, "content": content, "vector": vector, "status": "SUCCESS"}
 
-                # --- LOGIC CHẠY THẬT (GỌI API) ---
+                # --- CHẾ ĐỘ THỰC CHIẾN (GỌI API) ---
                 else:
-                    # 1. Sinh câu trả lời
+                    # Prompt chuyên sâu cho vai diễn
                     prompt = f"""
-                    Bạn là một {self.role} xuất sắc hàng đầu thế giới.
-                    Hãy phân tích vấn đề sau dưới góc nhìn chuyên môn của bạn: "{user_question}"
-                    Yêu cầu: Ngắn gọn (dưới 100 từ), súc tích, đi thẳng vào trọng tâm chuyên ngành.
+                    Bạn đang đóng vai: {self.role} tại một nhà máy sản xuất lớn.
+                    Vấn đề đang được thảo luận: "{user_question}"
+                    
+                    NHIỆM VỤ:
+                    1. Phân tích vấn đề dựa trên LỢI ÍCH CỐT LÕI của vị trí bạn nắm giữ (Ví dụ: CFO chỉ quan tâm dòng tiền/lợi nhuận, QC quan tâm uy tín).
+                    2. Đưa ra con số giả định hoặc quy trình cụ thể.
+                    3. Quyết định dứt khoát: Sửa (Rework) hay Hủy (Scrap)?
                     """
                     
                     response = await acompletion(
@@ -57,8 +70,6 @@ class AIAgent:
                     )
                     content_text = response.choices[0].message.content
 
-                    # 2. Tạo Vector (Embedding) để phân loại
-                    # Dùng model text-embedding-3-small (Rất rẻ)
                     emb_res = await embedding(
                         model="text-embedding-3-small",
                         input=[content_text]
@@ -72,85 +83,76 @@ class AIAgent:
 
 class GrandCouncilPipeline:
     def __init__(self):
-        self.agents = []
+        pass
 
     async def run(self, user_question, st_status, st_progress, st_logs):
-        # 1. KÍCH HOẠT ĐÁM ĐÔNG
-        concurrency = 10 # Số luồng chạy song song
+        concurrency = 5 
         sem = asyncio.Semaphore(concurrency)
-        agents = [AIAgent(i) for i in range(CONFIG["TOTAL_AGENTS"])]
         
+        # Tạo Agent
+        agents = [AIAgent(i) for i in range(CONFIG["TOTAL_AGENTS"])]
         tasks = [agent.process(user_question, sem) for agent in agents]
         
         results = []
         completed = 0
         
-        # Chạy và update tiến độ
         for f in asyncio.as_completed(tasks):
             res = await f
             results.append(res)
             completed += 1
-            progress = int((completed / CONFIG["TOTAL_AGENTS"]) * 60)
-            if st_progress: st_progress.progress(progress)
-            
-            # Hiện log thời gian thực cho 3 con đầu tiên
+            if st_progress: st_progress.progress(int((completed / CONFIG["TOTAL_AGENTS"]) * 70))
             if st_logs and completed <= 3:
-                st_logs[0].markdown(f"**{res.get('role', 'System')}**: {res.get('content', 'Error')[:100]}...")
+                st_logs[0].write(f"👤 **{res.get('role')}**: {res.get('content')[:150]}...")
 
         valid_data = [r for r in results if r["status"] == "SUCCESS"]
-        if not valid_data: return "❌ Lỗi: Không có phản hồi từ AI (Kiểm tra API Key)", None
+        if not valid_data: return "Lỗi kết nối API. Hãy kiểm tra Key.", None
 
-        # 2. PHÂN CỤM Ý TƯỞNG (CLUSTERING)
-        if st_logs: st_logs[1].info("Đang dùng thuật toán K-Means phân tích Vector...")
-        
+        # Phân cụm
+        if st_logs: st_logs[1].info("Đang phân tích mâu thuẫn giữa các phòng ban...")
         vectors = np.array([item['vector'] for item in valid_data])
-        n_clusters = min(CONFIG["FILTER_KEEP"], len(valid_data))
         
-        kmeans = KMeans(n_clusters=n_clusters, n_init=10)
+        kmeans = KMeans(n_clusters=min(CONFIG["FILTER_KEEP"], len(valid_data)), n_init=10)
         kmeans.fit(vectors)
         
-        # Gom nhóm và chọn đại diện
         representatives = []
-        df_for_chart = [] # Dữ liệu để vẽ biểu đồ
+        df_for_chart = []
         
-        seen_clusters = set()
+        seen = set()
         for i, label in enumerate(kmeans.labels_):
             item = valid_data[i]
-            # Lưu dữ liệu để vẽ
             df_for_chart.append({
-                "Role": item['role'],
-                "Cluster": str(label),
-                "Content": item['content'][:50] + "...",
-                "x": vectors[i][0], # Lấy chiều thứ 1 làm tọa độ giả
-                "y": vectors[i][1]  # Lấy chiều thứ 2 làm tọa độ giả
+                "Role": item['role'], "Cluster": str(label), 
+                "Content": item['content'][:100], 
+                "x": vectors[i][0], "y": vectors[i][1]
             })
             
-            if label not in seen_clusters:
+            if label not in seen:
                 representatives.append(item)
-                seen_clusters.add(label)
-                if st_logs: st_logs[1].markdown(f"- **Nhóm quan điểm {label+1}**: Đại diện bởi *{item['role']}*")
+                seen.add(label)
+                if st_logs: st_logs[1].write(f"- Quan điểm {label+1}: {item['role']}")
 
-        # 3. TỔNG HỢP CUỐI CÙNG (FINAL JUDGE)
-        if st_logs: st_logs[2].info("Đang tổng hợp câu trả lời tối ưu...")
+        # Tổng hợp
+        if st_logs: st_logs[2].info("CFO và Giám đốc nhà máy đang chốt phương án...")
         final_ans = await self.final_synthesis(representatives, user_question)
         
         if st_progress: st_progress.progress(100)
         return final_ans, pd.DataFrame(df_for_chart)
 
     async def final_synthesis(self, reps, q):
-        # Tổng hợp ý kiến
-        context = "\n".join([f"- {r['role']}: {r['content']}" for r in reps])
+        context = "\n".join([f"- {r['role']} đề xuất: {r['content']}" for r in reps])
         
         if CONFIG["SIMULATION_MODE"]:
             return f"**TỔNG HỢP GIẢ LẬP:**\n{context}"
         else:
             prompt = f"""
-            Bạn là Chủ tịch Hội đồng Tối cao. Dưới đây là ý kiến của các nhóm chuyên gia về vấn đề: "{q}"
+            Bạn là Tổng Giám Đốc (CEO). Dưới đây là tranh luận giữa các trưởng phòng về vấn đề: "{q}"
             
             {context}
             
-            NHIỆM VỤ:
-            Tổng hợp thành một câu trả lời hoàn chỉnh, giải quyết mâu thuẫn và đưa ra lời khuyên hành động cụ thể.
+            YÊU CẦU:
+            1. Tóm tắt xung đột chính (Ví dụ: Tài chính muốn hủy để cắt lỗ, nhưng Sản xuất muốn sửa để kịp giao hàng).
+            2. Đưa ra QUYẾT ĐỊNH CUỐI CÙNG (Final Verdict) dựa trên tối ưu hóa lợi nhuận.
+            3. Lập bảng so sánh ngắn gọn.
             """
             try:
                 response = await acompletion(
