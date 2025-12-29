@@ -3,10 +3,8 @@ asyncio
 aiohttp
 numpy
 scikit-learn
-tqdm
-psutil
 chromadb
-colorama
 litellm
 plotly
-watchdog
+pandas
+tenacity
