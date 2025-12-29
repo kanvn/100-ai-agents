@@ -1,51 +1,73 @@
 import streamlit as st
 import asyncio
 import os
-# Import class từ file core_logic.py (File code Python dài nhất ở câu trả lời trước)
-# Lưu ý: Bạn phải lưu file code dài đó thành tên 'core_logic.py'
+import plotly.express as px
+# Import code xử lý từ file core_logic
 from core_logic import GrandCouncilPipeline, CONFIG 
 
-# Cấu hình trang
-st.set_page_config(page_title="AI Hive Mind Server", page_icon="🧠", layout="wide")
+# Cấu hình trang web
+st.set_page_config(page_title="AI Hive Mind Pro", page_icon="🧠", layout="wide")
 
-st.title("🧠 SERVER: ĐẠI HỘI ĐỒNG 100 AI")
-st.markdown("---")
+st.title("🧠 ĐẠI HỘI ĐỒNG 100 AI")
+st.caption("Hệ thống trí tuệ bầy đàn thực chiến")
 
-# Sidebar cấu hình
+# --- THANH CẤU HÌNH BÊN TRÁI ---
 with st.sidebar:
-    st.header("🎛️ Control Panel")
-    CONFIG["TOTAL_AGENTS"] = st.slider("Số lượng Agents", 10, 100, 50)
-    CONFIG["SIMULATION_MODE"] = st.toggle("Chế độ Giả lập", value=True)
+    st.header("⚙️ Cấu hình lõi")
     
-    # Nhập Key nếu không có biến môi trường
-    if not os.environ.get("OPENAI_API_KEY"):
-        api_key = st.text_input("API Key", type="password")
+    # Nút chuyển chế độ
+    mode = st.radio("Chế độ hoạt động:", ["Giả lập (Miễn phí)", "Thực chiến (API)"])
+    if mode == "Thực chiến (API)":
+        CONFIG["SIMULATION_MODE"] = False
+        api_key = st.text_input("Nhập OpenAI API Key:", type="password")
         if api_key: os.environ["OPENAI_API_KEY"] = api_key
-
-# Giao diện chính
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    question = st.text_area("Nhập vấn đề cần giải quyết:", height=150)
-    start_btn = st.button("🚀 KÍCH HOẠT HỆ THỐNG", use_container_width=True)
-
-with col2:
-    st.info("Trạng thái Server: ✅ Online")
-    st.write(f"RAM khả dụng: Tự động tối ưu")
-
-# Khu vực Log
-log_container = st.container()
-
-if start_btn and question:
-    with st.spinner("Đang khởi động 100 luồng xử lý..."):
-        # Chuyển đổi hàm chạy console sang hiển thị web
-        # (Bạn cần sửa nhẹ class GrandCouncilPipeline trong core_logic.py để trả về text thay vì print)
-        # Hoặc dùng st.write đè lên print
+    else:
+        CONFIG["SIMULATION_MODE"] = True
         
+    CONFIG["TOTAL_AGENTS"] = st.slider("Số lượng Chuyên gia", 5, 50, 20)
+
+# --- GIAO DIỆN CHÍNH ---
+question = st.text_area("Nhập vấn đề khó khăn của bạn:", height=100)
+
+if st.button("🚀 KÍCH HOẠT HỆ THỐNG", type="primary"):
+    if not question:
+        st.warning("Vui lòng nhập câu hỏi!")
+    else:
         pipeline = GrandCouncilPipeline()
         
-        # Để đơn giản hóa việc deploy, ta chạy pipeline và hiển thị kết quả cuối
-        # Muốn hiển thị realtime trên web cần dùng st.empty() như hướng dẫn trước
-        asyncio.run(pipeline.run(question)) 
+        # Tạo các khu vực hiển thị
+        status = st.empty()
+        bar = st.progress(0)
         
-        st.success("Đã hoàn thành tác vụ!")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            with st.expander("GĐ 1: Thu thập ý kiến", expanded=True): log1 = st.empty()
+        with col2:
+            with st.expander("GĐ 2: Phân tích & Gom nhóm", expanded=True): log2 = st.empty()
+        with col3:
+            with st.expander("GĐ 3: Tổng hợp", expanded=True): log3 = st.empty()
+
+        # --- CHẠY LOGIC (KHẮC PHỤC LỖI TẠI DÒNG NÀY) ---
+        # Truyền đủ 4 tham số: question, status, bar, logs
+        try:
+            result_text, df_chart = asyncio.run(pipeline.run(question, status, bar, [log1, log2, log3]))
+            
+            # Hiển thị kết quả
+            st.success("✅ ĐÃ CÓ PHƯƠNG ÁN XỬ LÝ!")
+            st.markdown("### 📝 KẾT QUẢ QUYẾT NGHỊ:")
+            st.write(result_text)
+            
+            # Vẽ biểu đồ tư duy (Nếu có dữ liệu)
+            if df_chart is not None and not df_chart.empty:
+                st.markdown("---")
+                st.markdown("### 📊 BẢN ĐỒ TƯ DUY CỦA CÁC AGENT")
+                fig = px.scatter(
+                    df_chart, x="x", y="y", 
+                    color="Cluster", hover_data=["Role", "Content"],
+                    title="Sự phân bố các luồng ý kiến"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+        except Exception as e:
+            st.error(f"Đã xảy ra lỗi: {str(e)}")
+            st.info("Mẹo: Nếu dùng chế độ Thực chiến, hãy kiểm tra lại API Key.")
