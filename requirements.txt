@@ -1,10 +1,2 @@
 streamlit
-asyncio
-aiohttp
-numpy
-scikit-learn
-chromadb
 litellm
-plotly
-pandas
-tenacity
